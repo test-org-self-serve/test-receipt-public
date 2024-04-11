@@ -1,0 +1,57 @@
+# Pac-Man is GitHub Actions workflow that generates usage of all existing metered products.
+# The usage is attributed to the owner of the test repository where Pac-Man is run.
+#
+# Usage
+# 1. Copy pac-man.yml (this file) into folder .github/workflows in your test repository
+#
+# Steps 2 and 3 are required for generating Codespaces and Packages usage. If you need only
+# Actions and Shared Storage usage, you can skip these steps.
+#
+# 2. Create personal access token at https://github.com/settings/tokens with scopes "codespace" and "write:packages. Make sure you select a classic and not a beta token."
+# 3. Save the token as Actions secret "PACMAN_TOKEN" in your test repository
+#
+# Save the token for later. You will be prompted to enter it when executing step 6.
+#
+# 4. Run Pac-Man by clicking the "Run workflow" button in the Actions tab of your test repository 🚀
+#
+# Steps 5 is required only for generating Packages bandwidth usage.
+#
+# 5. Follow the Actions Summary instuctions to download and execute pac-man.sh
+name: codespaces
+run-name: ${{ github.event.inputs.sku }}, ${{ github.event.inputs.minutes }} minutes
+on:
+  workflow_dispatch:
+    inputs:
+      sku:
+        type: choice
+        description: SKU
+        options:
+          - basicLinux32gb
+          - standardLinux32gb
+          - premiumLinux
+          - largePremiumLinux
+      minutes:
+        description: Minutes
+        default: "30"
+        required: true
+jobs:
+  codespaces:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Codespace
+        id: create
+        # Min --idle-timeout is 5. Otherwise try to use $MINUTES so the codespace does not stop too early.
+        # tail -n1 extracts the last line of gh codespace create output, the codespace name. Text "✓ Codespaces usage for this repository is paid for by" can
+        # be present on the first line.
+        run: |
+          idle_timeout=$(( $MINUTES > 5 ? $MINUTES : 5 ))
+          codespace_name=$(gh codespace create -r ${{ github.repository }} -b main -m ${{ github.event.inputs.sku }} --idle-timeout ${idle_timeout}m | tail -n1)
+          echo "::set-output name=codespace_name::$codespace_name"
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACMAN_TOKEN }}
+          MINUTES: ${{ github.event.inputs.minutes }}
+      - run: echo "😴 Sleeping for ${{ github.event.inputs.minutes }} minute(s) to generate more Codespaces usage"
+      - run: sleep $((${{ github.event.inputs.minutes }} * 60))
+      - run: gh codespace delete -c ${{ steps.create.outputs.codespace_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.PACMAN_TOKEN }}

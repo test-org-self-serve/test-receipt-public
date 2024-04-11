@@ -1,0 +1,80 @@
+name: packages
+run-name: ${{ github.event.inputs.gigabytes }}GB
+on:
+  workflow_dispatch:
+    inputs:
+      gigabytes:
+        description: Gigabytes
+        default: "1"
+        required: true
+jobs:
+  packages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Package name
+        run: |
+          echo "PACKAGE_NAME=@${REPOSITORY,,}" >>${GITHUB_ENV}
+          echo "PACKAGE_VERSION=1.0.$(date +%s)" >>${GITHUB_ENV}
+        env:
+          REPOSITORY: "${{ github.repository }}"
+      - name: Create package.json
+        shell: pwsh
+        run: |
+          New-Item package.json
+          $Timestamp = Get-Date -UFormat %s -Millisecond 0
+          Set-Content package.json "{`"name`": `"$Env:PACKAGE_NAME`", `"version`": `"$Env:PACKAGE_VERSION`"}"
+      - uses: actions/setup-node@v2
+        with:
+          node-version: "16.x"
+          registry-url: "https://npm.pkg.github.com"
+      - run: npm install
+      - run: echo "This package was published by Pac-Man" > README.md
+      - name: Generate large package content
+        run: |
+          fallocate -l ${{ github.event.inputs.gigabytes }}G ${{ github.event.inputs.gigabytes }}GB-file.txt
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate pac-man.sh
+        run: |
+          echo "# Copy from here" >> pac-man.sh
+          echo "set -e" >> pac-man.sh
+          echo "echo \"Please enter PACMAN_TOKEN\"" >> pac-man.sh
+          echo "read -s PACMAN_TOKEN" >> pac-man.sh
+          echo "h1=\"Authorization\"" >> pac-man.sh
+          echo "h2=\"Bearer\"" >> pac-man.sh
+          echo "response=\$(curl -H \"\$h1: \$h2 \$PACMAN_TOKEN\" https://npm.pkg.github.com/$PACKAGE_NAME)" >> pac-man.sh
+          echo "echo \$response" >> pac-man.sh
+          echo "if [[ \$response =~ \"error\\\":\" ]]; then" >> pac-man.sh
+          echo "  exit 1" >> pac-man.sh
+          echo "fi" >> pac-man.sh
+          echo "download_url=\$(echo -E \$response | jq \".versions | .[\\\"$PACKAGE_VERSION\\\"] | .dist | .tarball\" -r)" >> pac-man.sh
+          echo "echo \"Package download URL: \$download_url\"" >> pac-man.sh
+          echo "for i in {1..100}" >> pac-man.sh
+          echo "do" >> pac-man.sh
+          echo "  curl -H \"\$h1: \$h2 \$PACMAN_TOKEN\" -L \$download_url --output /tmp/pac-man-package || true" >> pac-man.sh
+          echo "  if grep -q \"error\\\":\" /tmp/pac-man-package; then" >> pac-man.sh
+          echo "    cat /tmp/pac-man-package" >> pac-man.sh
+          echo "    exit 1" >> pac-man.sh
+          echo "  fi" >> pac-man.sh
+          echo "done" >> pac-man.sh
+      - name: Upload pac-man.sh script
+        uses: actions/upload-artifact@v3
+        with:
+          name: pac-man.sh
+          path: pac-man.sh
+      - name: Execution Instructions
+        run: |
+          echo "# pac-man.sh Instructions" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. Download pac-man.sh from the actions artifacts to your computer by clicking on pac-man.sh in the Artifacts section above these instructions" >> $GITHUB_STEP_SUMMARY
+          echo "2. run \`chmod a+x pac-man.sh\`" >> $GITHUB_STEP_SUMMARY
+          echo "3. Execute the script and have a PAT ready that has packages:read permissions (Like the PACMAN_TOKEN PAT)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Alternate Instructions" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. Copy and paste the following script directly to your terminal" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`shell" >> $GITHUB_STEP_SUMMARY
+          cat pac-man.sh >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
